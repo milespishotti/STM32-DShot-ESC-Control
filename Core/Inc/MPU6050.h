@@ -10,7 +10,7 @@
 
 #include "main.h"
 
-void MPU6050_Init(void);
+uint8_t MPU6050_Init(void);
 void MPU6050_Read(void);
 void Calibrate_MPU6050(void);
 void Update_Angle(void);

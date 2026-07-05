@@ -36,36 +36,48 @@ float dt = 0.25f;
 
 extern I2C_HandleTypeDef hi2c1;
 
-void MPU6050_Init(void)
+uint8_t MPU6050_Init(void)
 {
-    uint8_t check;
+    uint8_t check = 0;
+
+
+    HAL_StatusTypeDef status = HAL_I2C_Mem_Read(&hi2c1, MPU6050_ADDR, WHO_AM_I, 1, &check, 1, 50);
+    printf("status=%d, check=%d\r\n", status, check);
+
+    if (status != HAL_OK || check != 0x68)
+    {
+        printf("check failed\r\n");
+        return 0;
+    }
+
+    printf("check passed\r\n");
+
+
+
     uint8_t Data;
 
-    HAL_I2C_Mem_Read(&hi2c1, MPU6050_ADDR, WHO_AM_I, 1, &check, 1, 1000);
-    printf("%d\r\n", check);
-    if (check == 0x68)
-    {
-        printf("check passed\r\n");
-        Data = 0;
-        HAL_I2C_Mem_Write(&hi2c1, MPU6050_ADDR, PWR_MGMT_1, 1, &Data, 1, 1000);
-        printf("configured pwrmgmt1\r\n");
 
-        Data = 0x07;
-        HAL_I2C_Mem_Write(&hi2c1, MPU6050_ADDR, SMPLRT_DIV, 1, &Data, 1, 1000);
-        printf("set sample rate to 1 kHz\r\n");
 
-        Data = 0x00;
-        HAL_I2C_Mem_Write(&hi2c1, MPU6050_ADDR, GYRO_CONFIG, 1, &Data, 1, 1000);
-        printf("config gyro max = 250\r\n");
+    Data = 0;
+    HAL_I2C_Mem_Write(&hi2c1, MPU6050_ADDR, PWR_MGMT_1, 1, &Data, 1, 50);
+    printf("configured pwrmgmt1\r\n");
 
-        Data = 0x00;
-        HAL_I2C_Mem_Write(&hi2c1, MPU6050_ADDR, ACCEL_CONFIG, 1, &Data, 1, 1000);
-        printf("config accel max = 2g \r\n");
+    Data = 0x07;
+    HAL_I2C_Mem_Write(&hi2c1, MPU6050_ADDR, SMPLRT_DIV, 1, &Data, 1, 50);
+    printf("set sample rate to 1 kHz\r\n");
 
-    } else {
-        printf("check failed\r\n");
-    }
+    Data = 0x00;
+    HAL_I2C_Mem_Write(&hi2c1, MPU6050_ADDR, GYRO_CONFIG, 1, &Data, 1, 50);
+    printf("config gyro max = 250\r\n");
+
+    Data = 0x00;
+    HAL_I2C_Mem_Write(&hi2c1, MPU6050_ADDR, ACCEL_CONFIG, 1, &Data, 1, 50);
+    printf("config accel max = 2g \r\n");
+
+
     printf("\r\n");
+    return 1;
+
 }
 
 
@@ -74,8 +86,17 @@ void MPU6050_Read (void)
     uint8_t RecDataAccel[6];
     uint8_t RecDataGyro[6];
 
-    HAL_I2C_Mem_Read(&hi2c1, MPU6050_ADDR, ACCEL_XOUT_H, 1, RecDataAccel, 6, 1000);
-    HAL_I2C_Mem_Read(&hi2c1, MPU6050_ADDR, GYRO_XOUT_H, 1, RecDataGyro, 6, 1000);
+    HAL_StatusTypeDef status1;
+    HAL_StatusTypeDef status2;
+
+    status1 = HAL_I2C_Mem_Read(&hi2c1, MPU6050_ADDR, ACCEL_XOUT_H, 1, RecDataAccel, 6, 50);
+    status2 = HAL_I2C_Mem_Read(&hi2c1, MPU6050_ADDR, GYRO_XOUT_H, 1, RecDataGyro, 6, 50);
+
+    if (status1 != HAL_OK || status2 != HAL_OK)
+    {
+        printf("MPU read failed: accel = %d, gyro = %d\r\n", status1, status2);
+        return;
+    }
 
 
     int16_t Accel_X_Raw = (RecDataAccel[0] << 8 | RecDataAccel[1]);

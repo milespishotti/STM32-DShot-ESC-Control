@@ -98,12 +98,15 @@ uint16_t dshot_buffer[DSHOT_LEN] = {0};
 uint32_t pulse;
 
 volatile uint8_t sampleFlag = 0;
+volatile uint8_t controlFlag = 0;
 
 
 volatile uint8_t dshot_busy = 0;
 volatile uint32_t dshot_start_count = 0;
 volatile uint32_t dshot_done_count = 0;
 volatile uint32_t dshot_busy_skip_count = 0;
+
+
 
 
 
@@ -152,6 +155,10 @@ void HAL_TIM_PeriodElapsedCallback (TIM_HandleTypeDef *htim)
     {
         sampleFlag = 1;
     }
+    else if (htim -> Instance == TIM5)
+    {
+        controlFlag = 1;
+    }
 
 
 }
@@ -198,6 +205,9 @@ void Build_Dshot_Packet(uint16_t throttle_cmd)
     // Long low period after packet
     dshot_buffer[16] = 0;
     dshot_buffer[17] = 0;
+//    printf("%u %u %u %u %u %u\r\n",
+//           dshot_buffer[0], dshot_buffer[1], dshot_buffer[2],
+//           dshot_buffer[3], dshot_buffer[4], dshot_buffer[5]);
 }
 
 
@@ -244,10 +254,16 @@ void Send_DShot(uint16_t throttle_cmd)
     __HAL_TIM_SET_COUNTER(&htim4, 0);
     __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1, 0);
 
-    HAL_DMA_Start_IT(&hdma_tim4_up,
+    HAL_StatusTypeDef status = HAL_DMA_Start_IT(&hdma_tim4_up,
                      (uint32_t)&dshot_buffer[0],
                      (uint32_t)&TIM4->CCR1,
                      DSHOT_LEN);
+
+    if (status != HAL_OK)
+    {
+        dshot_busy = 0;
+        return;
+    }
 
     TIM4->DIER |= TIM_DIER_UDE;
 }
@@ -263,6 +279,7 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
+    printf("ACTIVE MAIN 12345\r\n");
 
 
 
@@ -294,17 +311,39 @@ int main(void)
   MX_TIM4_Init();
   MX_TIM5_Init();
   /* USER CODE BEGIN 2 */
+  printf("BOOT\r\n");
+  printf("RESET FLAGS: 0x%081X\r\n", RCC->CSR);
+  __HAL_RCC_CLEAR_RESET_FLAGS();
 
-  MPU6050_Init();
+
+  printf("ABOUT TO INIT MPU FROM REAL MAIN\r\n");
+
+  HAL_Delay(300);
+
+  for (int attempt = 1; attempt <=5; attempt ++)
+  {
+
+      if (MPU6050_Init())
+      {
+          printf("MPU Init Success on attempt %d\r\n", attempt);
+          printf("Calibrating MPU\r\n");
+          Calibrate_MPU6050();
+          printf("Calibration done\r\n");
+          break;
+      }
+
+      printf("MPU Init attempt failed attempt %d\r\n", attempt);
+      HAL_Delay(200);
+  }
+
     HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
     HAL_TIM_Base_Start_IT(&htim3);
 
-    printf("Calibrating MPU\r\n");
-    Calibrate_MPU6050();
-    printf("Calibration Complete\r\n");
     angleX = 0.0f;
     angleY = 0.0f;
     angleZ = 0.0f;
+
+    int i = 0;
 
 //    throttle = 1000;
 
@@ -323,6 +362,45 @@ int main(void)
 
     uint32_t lastRampTime = HAL_GetTick();
     uint16_t throttle_cmd = 0;
+
+
+    uint16_t min_throttle = 100;
+    uint16_t max_throttle = 650;
+    uint16_t base_throttle = 380;
+    float max_angle = 90.0f;
+    float target_angle = 5.0f;
+
+    float error = 0;
+
+//    float max_correction = 60.0f;
+
+    float filteredThrottle = 0;
+
+    float kp_up = 10.5f;
+    float kd_up = 0.55f;
+
+    float kp_down = 14.0f;
+    float kd_down = 0.15f;
+
+    float ki = 0.5f;
+
+    float prev_error = 0.0f;
+    const float dt = 0.01f;
+
+    float integral = 0.0f;
+    float integral_limit = 100.0f;
+
+    float derivative = 0.0f;
+    float correction = 0.0f;
+
+    float P = 0.0f;
+    float D = 0.0f;
+    float I = 0.0f;
+
+
+    HAL_TIM_Base_Start_IT(&htim5);
+
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -331,142 +409,139 @@ int main(void)
   {
     /* USER CODE END WHILE */
 
-
-
     /* USER CODE BEGIN 3 */
 
-      if (HAL_GetTick() - start < 3000)
-          {
-              throttle_cmd = 0;
-          }
-          else
-          {
-              if (HAL_GetTick() - lastRampTime >= 50)
-              {
-                  lastRampTime += 50;
+//      Send_DShot(300);
+//      HAL_Delay(2);
+////      printf("start=%lu done=%lu skip=%lu busy=%u\r\n",
+////             dshot_start_count,
+////             dshot_done_count,
+////             dshot_busy_skip_count,
+////             dshot_busy);
 
-                  if (throttle_cmd < 500)
-                  {
-                      throttle_cmd += 10;
-                  }
-              }
-          }
 
-          if (HAL_GetTick() - last_dshot_time >= 2)
-          {
-              last_dshot_time += 2;
-              Send_DShot(throttle_cmd);
-          }
+    if (controlFlag)
+    {
+
+        controlFlag = 0;
+
+        MPU6050_Read();
+
+           Gx = Gx - GxOffset;
+           Gy = Gy - GyOffset;
+           Gz = Gz - GzOffset;
 
 
 
+           if (!FilterInitialized)
+           {
+               GxFiltered = Gx;
+               GyFiltered = Gy;
+               GzFiltered = Gz;
+               FilterInitialized = 1;
+           } else
+           {
+               GxFiltered = (0.9 * GxFiltered) + (Gx * 0.1);
+               GyFiltered = (0.9 * GyFiltered) + (Gy * 0.1);
+               GzFiltered = (0.9 * GzFiltered) + (Gz * 0.1);
+           }
 
 
 
-//      HAL_StatusTypeDef status;
-//      static uint32_t error_count = 0;
-//      static uint32_t lastPrint = 0;
-//
-//      if (dshot_ready)
-//      {
-//          dshot_ready = 0;
-//          Build_Dshot_Packet();
-//
-//          status = HAL_TIM_PWM_Start_DMA(&htim4,
-//                                         TIM_CHANNEL_1,
-//                                         (uint32_t*)dshot_buffer,
-//                                         40);
-//
-//          if (status != HAL_OK)
-//          {
-//              error_count++;
-//          }
-//      }
-//
-//      if (HAL_GetTick() - lastPrint > 1000)
-//      {
-//          lastPrint = HAL_GetTick();
-//          printf("errors=%lu\r\n", error_count);
-//      }
 
-//      throttle = 0;
-//      Build_Dshot_Packet();
-//      printf("T0: ");
-//      for (int i = 0; i < 18; i++)
-//      {
-//          printf("%lu ", dshot_buffer[i]);
-//      }
-//      printf("\r\n");
-//
-//      HAL_Delay(1000);
-//
-//      throttle = 1000;
-//      Build_Dshot_Packet();
-//      printf("T1000: ");
-//      for (int i = 0; i < 18; i++)
-//      {
-//          printf("%lu ", dshot_buffer[i]);
-//      }
-//      printf("\r\n");
+           float accelAngleX = atan2(Ay, Az) * 180.0f / M_PI;
+           float accelAngleY = atan2(-Ax, sqrt(Ay * Ay + Az * Az)) * 180.0f / M_PI;
 
-//
-//    uint32_t now = HAL_GetTick();
-//    dt = (now - lastTime) / 1000.0f;
-//    lastTime = now;
-//
-//
-//
-//    if (sampleFlag)
-//    {
-//
-//        sampleFlag = 0;
-//
-//        MPU6050_Read();
-//
-//           Gx = Gx - GxOffset;
-//           Gy = Gy - GyOffset;
-//           Gz = Gz - GzOffset;
-//
-//
-//
-//           if (!FilterInitialized)
-//           {
-//               GxFiltered = Gx;
-//               GyFiltered = Gy;
-//               GzFiltered = Gz;
-//               FilterInitialized = 1;
-//           } else
-//           {
-//               GxFiltered = (0.9 * GxFiltered) + (Gx * 0.1);
-//               GyFiltered = (0.9 * GyFiltered) + (Gy * 0.1);
-//               GzFiltered = (0.9 * GzFiltered) + (Gz * 0.1);
-//           }
-//
-//
-//           Update_Angle();
-//
-//           float accelAngleX = atan2(Ay, Az) * 180.0f / M_PI;
-//           float accelAngleY = atan2(-Ax, sqrt(Ay * Ay + Az * Az)) * 180.0f / M_PI;
-//
-//           angleX = 0.98f * (angleX + GxFiltered * dt) + 0.02f * accelAngleX;
-//           angleY = 0.98f * (angleY + GyFiltered * dt) + 0.02f * accelAngleY;
-//
-//           pulse = (angleX * 999) / 180;
-//           __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, pulse);
-//    }
+           angleX = 0.98f * (angleX + GxFiltered * dt) + 0.02f * accelAngleX;
+           angleY = 0.98f * (angleY + GyFiltered * dt) + 0.02f * accelAngleY;
+
+           pulse = (angleX * 999) / 180;
+           __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, pulse);
 
 
 
-//    if (i > 25)
-//    {
-//    printf("Angle: %0.2f, Pulse: %0.2u\r\n", angleX, pulse);
-//    printf("\r\n");
-//    i = 0;
-//    }
-//
-//    i++;
-//    HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5);
-//    HAL_Delay(10);
+
+
+
+
+
+
+        if (HAL_GetTick() - start < 3000)
+                 {
+                     throttle_cmd = 0;
+                 }
+                 else
+                 {
+
+                     error = target_angle - angleX;
+
+                     if (error < 0)
+                     {
+                         P = kp_down * error;
+                         D = -kd_down * GxFiltered;
+                     }
+                     else
+                     {
+                         P = kp_up * error;
+                         D = -kd_up * GxFiltered;
+                     }
+
+                     if (fabs(error) < 10.0f)
+                     {
+
+                         integral += error * dt;
+                     }
+                     else
+                     {
+                         integral = 0.0f;
+                     }
+
+
+                     if (integral > integral_limit) integral = integral_limit;
+                     if (integral < -integral_limit) integral = -integral_limit;
+
+
+
+
+                     I = ki * integral;
+
+                     correction = P + D + I;
+
+                     throttle_cmd = base_throttle + correction;
+
+//                     prev_error = error;
+
+
+
+
+
+                 }
+
+//        filteredThrottle = 0.9f * filteredThrottle + 0.1f * throttle_cmd;
+//        throttle_cmd = filteredThrottle;
+
+        if (throttle_cmd > max_throttle) throttle_cmd = max_throttle;
+        if (throttle_cmd < min_throttle) throttle_cmd = min_throttle;
+
+
+        Send_DShot(throttle_cmd);
+
+    }
+
+    if (i > 25)
+    {
+        printf("A:%7.2f E:%7.2f G:%7.2f I:%7.2f C:%8.2f  T:%3u\r\n",
+                angleX,
+                error,
+                GxFiltered,
+                I,
+                correction,
+                throttle_cmd);
+    i = 0;
+    }
+
+    i++;
+
 
 
 
@@ -748,15 +823,14 @@ static void MX_TIM5_Init(void)
 
   TIM_ClockConfigTypeDef sClockSourceConfig = {0};
   TIM_MasterConfigTypeDef sMasterConfig = {0};
-  TIM_OC_InitTypeDef sConfigOC = {0};
 
   /* USER CODE BEGIN TIM5_Init 1 */
 
   /* USER CODE END TIM5_Init 1 */
   htim5.Instance = TIM5;
-  htim5.Init.Prescaler = 83;
+  htim5.Init.Prescaler = 8399;
   htim5.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim5.Init.Period = 19999;
+  htim5.Init.Period = 99;
   htim5.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim5.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim5) != HAL_OK)
@@ -768,28 +842,15 @@ static void MX_TIM5_Init(void)
   {
     Error_Handler();
   }
-  if (HAL_TIM_PWM_Init(&htim5) != HAL_OK)
-  {
-    Error_Handler();
-  }
   sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
   sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
   if (HAL_TIMEx_MasterConfigSynchronization(&htim5, &sMasterConfig) != HAL_OK)
   {
     Error_Handler();
   }
-  sConfigOC.OCMode = TIM_OCMODE_PWM1;
-  sConfigOC.Pulse = 0;
-  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
-  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
-  if (HAL_TIM_PWM_ConfigChannel(&htim5, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
-  {
-    Error_Handler();
-  }
   /* USER CODE BEGIN TIM5_Init 2 */
 
   /* USER CODE END TIM5_Init 2 */
-  HAL_TIM_MspPostInit(&htim5);
 
 }
 
