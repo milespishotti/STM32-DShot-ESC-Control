@@ -368,7 +368,7 @@ int main(void)
     uint16_t max_throttle = 650;
     uint16_t base_throttle = 380;
     float max_angle = 90.0f;
-    float target_angle = 5.0f;
+    float target_angle = 5.5f;
 
     float error = 0;
 
@@ -376,13 +376,13 @@ int main(void)
 
     float filteredThrottle = 0;
 
-    float kp_up = 10.5f;
-    float kd_up = 0.55f;
+    float kp_up = 11.0;
+    float kd_up = 0.7f;
 
     float kp_down = 14.0f;
     float kd_down = 0.15f;
 
-    float ki = 0.5f;
+    float ki = 0.75f;
 
     float prev_error = 0.0f;
     const float dt = 0.01f;
@@ -396,6 +396,8 @@ int main(void)
     float P = 0.0f;
     float D = 0.0f;
     float I = 0.0f;
+
+    float boost = 0.0f;
 
 
     HAL_TIM_Base_Start_IT(&htim5);
@@ -475,6 +477,10 @@ int main(void)
 
                      error = target_angle - angleX;
 
+
+                     float absError = fabs(error);
+//                     float boost = 0.0f;
+
                      if (error < 0)
                      {
                          P = kp_down * error;
@@ -484,9 +490,18 @@ int main(void)
                      {
                          P = kp_up * error;
                          D = -kd_up * GxFiltered;
+
+//                         if (error > 0.0f && absError >= 2.5f && absError <= 6.0f)
+//                         {
+//                             boost = 40.0f * (absError - 2.0f);
+//                         }
+//                         else
+//                         {
+//                             boost = 0.0f;
+//                         }
                      }
 
-                     if (fabs(error) < 10.0f)
+                     if (fabs(error) < 8.0f)
                      {
 
                          integral += error * dt;
@@ -505,7 +520,7 @@ int main(void)
 
                      I = ki * integral;
 
-                     correction = P + D + I;
+                     correction = P + D + I + boost;
 
                      throttle_cmd = base_throttle + correction;
 
@@ -530,10 +545,11 @@ int main(void)
 
     if (i > 25)
     {
-        printf("A:%7.2f E:%7.2f G:%7.2f I:%7.2f C:%8.2f  T:%3u\r\n",
+        printf("A:%7.2f E:%7.2f G:%7.2f B:%.7f I:%7.2f C:%8.2f  T:%3u\r\n",
                 angleX,
                 error,
                 GxFiltered,
+                boost,
                 I,
                 correction,
                 throttle_cmd);
