@@ -134,49 +134,72 @@ Responsibilities:
 - Checksum calculation
 - DMA waveform transmission
 - ESC communication
-```
+
 
 
 ## Control Algorithm
 
-The controller executes at a fixed 100 Hz update rate. During each iteration, the STM32 acquires new IMU measurements, estimates the arm angle, computes a control correction, and transmits a new DShot throttle command to the ESC.
-
-The control loop consists of the following stages:
+The controller operates as a real-time closed-loop feedback system running at **100 Hz**. During every control cycle, the STM32 acquires new IMU measurements, estimates the current arm angle, calculates the required motor correction, and transmits a new DShot150 command to the ESC.
 
 ```text
-Read MPU6050
-      │
-      ▼
-Calibrate Gyroscope Measurements
-      │
-      ▼
-Low-Pass Filter Gyroscope Data
-      │
-      ▼
-Compute Accelerometer Angle
-      │
-      ▼
-Complementary Filter
-      │
-      ▼
-Estimate Current Arm Angle
-      │
-      ▼
-PID Controller
-      │
-      ▼
-Throttle Command
-      │
-      ▼
-Generate DShot150 Packet
-      │
-      ▼
-DMA Transmission
-      │
-      ▼
-ESC → Brushless Motor
+          MPU6050
+      (Accel + Gyro)
+             │
+             ▼
+    Gyroscope Calibration
+             │
+             ▼
+     Gyro Low-Pass Filter
+             │
+             ▼
+     Complementary Filter
+             │
+             ▼
+    Current Arm Angle
+             │
+             ▼
+       PID Controller
+             │
+             ▼
+     Throttle Correction
+             │
+             ▼
+      DShot150 Driver
+             │
+             ▼
+       ESC + Motor
+             │
+             ▼
+      Physical Balance Arm
+             │
+             └───────────────┐
+                             │
+                MPU6050 Measures Angle
 ```
 
+### Sensor Processing
+
+Each control cycle begins by reading the accelerometer and gyroscope from the MPU6050 over I2C.
+
+The gyroscope is first calibrated to remove startup bias before a low-pass filter reduces measurement noise. Accelerometer and gyroscope measurements are then fused using a complementary filter, providing a fast and stable estimate of the arm angle while minimizing long-term drift.
+
+### Closed-Loop Control
+
+The estimated angle is continuously compared to a target angle to determine the current control error.
+
+A PID controller computes the required throttle correction using:
+
+- **Proportional (P):** Responds to the current angle error.
+- **Integral (I):** Compensates for small steady-state errors caused by gravity and changing system conditions.
+- **Derivative (D):** Uses filtered gyroscope measurements to damp oscillations and improve stability.
+
+The controller applies different proportional and derivative gains depending on the direction of motion to better match the asymmetric dynamics of the balance arm.
+
+### Motor Command Generation
+
+The final controller output is combined with an experimentally determined base throttle before being converted into a DShot150 packet.
+
+The packet is transmitted using an STM32 timer and DMA, allowing the ESC to receive precisely timed digital throttle commands while the CPU continues executing the control loop.
 ### Angle Estimation
 
 The MPU6050 provides both accelerometer and gyroscope measurements.
@@ -253,6 +276,20 @@ ESC Receives Packet
         ▼
 Motor Speed Updated
 ```
+
+## Results
+
+The completed controller successfully maintains the balance arm near the target angle while recovering from external disturbances.
+
+Key outcomes include:
+
+- Stable closed-loop balancing at a 100 Hz control rate
+- Reliable DShot150 communication generated entirely in firmware
+- Consistent angle estimation using complementary filtering
+- Successful recovery from manual disturbances
+- Modular firmware architecture separating sensor, controller, and motor control logic
+
+
 
 
 ## Development Challenges
