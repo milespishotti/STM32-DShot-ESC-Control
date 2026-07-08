@@ -366,7 +366,7 @@ int main(void)
 
     uint16_t min_throttle = 100;
     uint16_t max_throttle = 650;
-    uint16_t base_throttle = 380;
+    uint16_t base_throttle = 430;
     float max_angle = 90.0f;
     float target_angle = 5.5f;
 
@@ -377,7 +377,7 @@ int main(void)
     float filteredThrottle = 0;
 
     float kp_up = 11.0;
-    float kd_up = 0.7f;
+    float kd_up = 0.6f;
 
     float kp_down = 14.0f;
     float kd_down = 0.15f;
