@@ -27,6 +27,8 @@
 #include <math.h>
 
 #include "MPU6050.h"
+#include "DShot.h"
+#include "Controller.h"
 
 /* USER CODE END Includes */
 
@@ -47,7 +49,7 @@
 #define GYRO_XOUT_H (0x43)
 
 
-#define DSHOT_LEN 18
+//#define DSHOT_LEN 18
 
 /* USER CODE END PD */
 
@@ -86,13 +88,13 @@ float error_roc = 0.0f;
 float tuned_value = 0.0f;
 float prev_error = 0.0f;
 
-int FilterInitialized = 0;
+//int FilterInitialized = 0;
 
 
 uint16_t telemetry = 0;
 //uint16_t dshot_buffer[18];
 
-uint16_t dshot_buffer[DSHOT_LEN] = {0};
+//uint16_t dshot_buffer[DSHOT_LEN] = {0};
 
 
 uint32_t pulse;
@@ -101,10 +103,10 @@ volatile uint8_t sampleFlag = 0;
 volatile uint8_t controlFlag = 0;
 
 
-volatile uint8_t dshot_busy = 0;
-volatile uint32_t dshot_start_count = 0;
-volatile uint32_t dshot_done_count = 0;
-volatile uint32_t dshot_busy_skip_count = 0;
+//volatile uint8_t dshot_busy = 0;
+//volatile uint32_t dshot_start_count = 0;
+//volatile uint32_t dshot_done_count = 0;
+//volatile uint32_t dshot_busy_skip_count = 0;
 
 
 
@@ -174,99 +176,99 @@ void PID(void)
    prev_error = error;
 }
 
-void Build_Dshot_Packet(uint16_t throttle_cmd)
-{
-    // Build 12-bit value: 11-bit throttle + telemetry bit
-    uint16_t value = (throttle_cmd << 1) | telemetry;
-
-    // DShot checksum
-    uint16_t csum = 0;
-    uint16_t csum_data = value;
-
-    for (int i = 0; i < 3; i++)
-    {
-        csum ^= csum_data;
-        csum_data >>= 4;
-    }
-
-    csum &= 0x0F;
-
-    // Final 16-bit packet
-    uint16_t packet = (value << 4) | csum;
-
-//    printf("throttle=%u packet=0x%04X\r\n", throttle, packet);
-
-    // Convert bits to PWM compare values
-    for (int i = 0; i < 16; i++)
-    {
-        dshot_buffer[i] = (packet & (1 << (15 - i))) ? 420 : 210;
-    }
-
-    // Long low period after packet
-    dshot_buffer[16] = 0;
-    dshot_buffer[17] = 0;
-//    printf("%u %u %u %u %u %u\r\n",
-//           dshot_buffer[0], dshot_buffer[1], dshot_buffer[2],
-//           dshot_buffer[3], dshot_buffer[4], dshot_buffer[5]);
-}
-
-
+//void Build_Dshot_Packet(uint16_t throttle_cmd)
+//{
+//    // Build 12-bit value: 11-bit throttle + telemetry bit
+//    uint16_t value = (throttle_cmd << 1) | telemetry;
+//
+//    // DShot checksum
+//    uint16_t csum = 0;
+//    uint16_t csum_data = value;
+//
+//    for (int i = 0; i < 3; i++)
+//    {
+//        csum ^= csum_data;
+//        csum_data >>= 4;
+//    }
+//
+//    csum &= 0x0F;
+//
+//    // Final 16-bit packet
+//    uint16_t packet = (value << 4) | csum;
+//
+////    printf("throttle=%u packet=0x%04X\r\n", throttle, packet);
+//
+//    // Convert bits to PWM compare values
+//    for (int i = 0; i < 16; i++)
+//    {
+//        dshot_buffer[i] = (packet & (1 << (15 - i))) ? 420 : 210;
+//    }
+//
+//    // Long low period after packet
+//    dshot_buffer[16] = 0;
+//    dshot_buffer[17] = 0;
+////    printf("%u %u %u %u %u %u\r\n",
+////           dshot_buffer[0], dshot_buffer[1], dshot_buffer[2],
+////           dshot_buffer[3], dshot_buffer[4], dshot_buffer[5]);
+//}
 
 
-void HAL_DMA_XferCpltCallback(DMA_HandleTypeDef *hdma)
-{
-    if (hdma == &hdma_tim4_up)
-    {
-        TIM4 -> DIER &= ~TIM_DIER_UDE;
-        __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1, 0);
-        dshot_done_count++;
-        dshot_busy = 0;
-    }
-}
 
-void DShot_DMA_Complete(DMA_HandleTypeDef *hdma)
-{
-    if (hdma == &hdma_tim4_up)
-    {
-        TIM4->DIER &= ~TIM_DIER_UDE;
-        __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1, 0);
 
-        dshot_done_count++;
-        dshot_busy = 0;
-    }
-}
+//void HAL_DMA_XferCpltCallback(DMA_HandleTypeDef *hdma)
+//{
+//    if (hdma == &hdma_tim4_up)
+//    {
+//        TIM4 -> DIER &= ~TIM_DIER_UDE;
+//        __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1, 0);
+//        dshot_done_count++;
+//        dshot_busy = 0;
+//    }
+//}
+//
+//void DShot_DMA_Complete(DMA_HandleTypeDef *hdma)
+//{
+//    if (hdma == &hdma_tim4_up)
+//    {
+//        TIM4->DIER &= ~TIM_DIER_UDE;
+//        __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1, 0);
+//
+//        dshot_done_count++;
+//        dshot_busy = 0;
+//    }
+//}
 
-void Send_DShot(uint16_t throttle_cmd)
-{
-
-    if (dshot_busy)
-    {
-        dshot_busy_skip_count++;
-        return;
-    }
-
-    dshot_busy = 1;
-    dshot_start_count++;
-
-    telemetry = 0;
-    Build_Dshot_Packet(throttle_cmd);
-
-    __HAL_TIM_SET_COUNTER(&htim4, 0);
-    __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1, 0);
-
-    HAL_StatusTypeDef status = HAL_DMA_Start_IT(&hdma_tim4_up,
-                     (uint32_t)&dshot_buffer[0],
-                     (uint32_t)&TIM4->CCR1,
-                     DSHOT_LEN);
-
-    if (status != HAL_OK)
-    {
-        dshot_busy = 0;
-        return;
-    }
-
-    TIM4->DIER |= TIM_DIER_UDE;
-}
+//void Send_DShot(uint16_t throttle_cmd)
+//{
+//
+//    if (dshot_busy)
+//    {
+//        dshot_busy_skip_count++;
+//        return;
+//    }
+//
+//    dshot_busy = 1;
+//    dshot_start_count++;
+//
+//    telemetry = 0;
+//    Build_Dshot_Packet(throttle_cmd);
+//
+//    __HAL_TIM_SET_COUNTER(&htim4, 0);
+//    __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1, 0);
+//
+//    HAL_StatusTypeDef status = HAL_DMA_Start_IT(&hdma_tim4_up,
+//                     (uint32_t)&dshot_buffer[0],
+//                     (uint32_t)&TIM4->CCR1,
+//                     DSHOT_LEN);
+//
+//    if (status != HAL_OK)
+//    {
+//        dshot_busy = 0;
+//        return;
+//    }
+//
+//    TIM4->DIER |= TIM_DIER_UDE;
+//}
 //
 
 /* USER CODE END 0 */
@@ -339,9 +341,11 @@ int main(void)
     HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
     HAL_TIM_Base_Start_IT(&htim3);
 
-    angleX = 0.0f;
-    angleY = 0.0f;
-    angleZ = 0.0f;
+//    angleX = 0.0f;
+//    angleY = 0.0f;
+//    angleZ = 0.0f;
+
+    Controller_Init();
 
     int i = 0;
 
@@ -355,8 +359,11 @@ int main(void)
 
 //    uint32_t lastPrint = 0;
 
-    hdma_tim4_up.XferCpltCallback = DShot_DMA_Complete;
-    HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_1);
+//    hdma_tim4_up.XferCpltCallback = DShot_DMA_Complete;
+//    HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_1);
+
+    DShot_Init();
+
     uint32_t last_dshot_time = 0;
     uint32_t start = HAL_GetTick();
 
@@ -376,28 +383,28 @@ int main(void)
 
     float filteredThrottle = 0;
 
-    float kp_up = 11.0;
-    float kd_up = 0.6f;
+//    float kp_up = 11.0;
+//    float kd_up = 0.6f;
+//
+//    float kp_down = 14.0f;
+//    float kd_down = 0.15f;
+//
+//    float ki = 0.75f;
 
-    float kp_down = 14.0f;
-    float kd_down = 0.15f;
-
-    float ki = 0.75f;
-
-    float prev_error = 0.0f;
-    const float dt = 0.01f;
-
-    float integral = 0.0f;
-    float integral_limit = 100.0f;
-
-    float derivative = 0.0f;
-    float correction = 0.0f;
-
-    float P = 0.0f;
-    float D = 0.0f;
-    float I = 0.0f;
-
-    float boost = 0.0f;
+//    float prev_error = 0.0f;
+//    const float dt = 0.01f;
+//
+//    float integral = 0.0f;
+//    float integral_limit = 100.0f;
+//
+//    float derivative = 0.0f;
+//    float correction = 0.0f;
+//
+//    float P = 0.0f;
+//    float D = 0.0f;
+//    float I = 0.0f;
+//
+//    float boost = 0.0f;
 
 
     HAL_TIM_Base_Start_IT(&htim5);
@@ -427,39 +434,41 @@ int main(void)
 
         controlFlag = 0;
 
-        MPU6050_Read();
+        Controller_UpdateSensors();
 
-           Gx = Gx - GxOffset;
-           Gy = Gy - GyOffset;
-           Gz = Gz - GzOffset;
-
-
-
-           if (!FilterInitialized)
-           {
-               GxFiltered = Gx;
-               GyFiltered = Gy;
-               GzFiltered = Gz;
-               FilterInitialized = 1;
-           } else
-           {
-               GxFiltered = (0.9 * GxFiltered) + (Gx * 0.1);
-               GyFiltered = (0.9 * GyFiltered) + (Gy * 0.1);
-               GzFiltered = (0.9 * GzFiltered) + (Gz * 0.1);
-           }
-
-
-
-
-           float accelAngleX = atan2(Ay, Az) * 180.0f / M_PI;
-           float accelAngleY = atan2(-Ax, sqrt(Ay * Ay + Az * Az)) * 180.0f / M_PI;
-
-           angleX = 0.98f * (angleX + GxFiltered * dt) + 0.02f * accelAngleX;
-           angleY = 0.98f * (angleY + GyFiltered * dt) + 0.02f * accelAngleY;
-
-           pulse = (angleX * 999) / 180;
-           __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, pulse);
-
+//        MPU6050_Read();
+//
+//           Gx = Gx - GxOffset;
+//           Gy = Gy - GyOffset;
+//           Gz = Gz - GzOffset;
+//
+//
+//
+//           if (!FilterInitialized)
+//           {
+//               GxFiltered = Gx;
+//               GyFiltered = Gy;
+//               GzFiltered = Gz;
+//               FilterInitialized = 1;
+//           } else
+//           {
+//               GxFiltered = (0.9 * GxFiltered) + (Gx * 0.1);
+//               GyFiltered = (0.9 * GyFiltered) + (Gy * 0.1);
+//               GzFiltered = (0.9 * GzFiltered) + (Gz * 0.1);
+//           }
+//
+//
+//
+//
+//           float accelAngleX = atan2(Ay, Az) * 180.0f / M_PI;
+//           float accelAngleY = atan2(-Ax, sqrt(Ay * Ay + Az * Az)) * 180.0f / M_PI;
+//
+//           angleX = 0.98f * (angleX + GxFiltered * dt) + 0.02f * accelAngleX;
+//           angleY = 0.98f * (angleY + GyFiltered * dt) + 0.02f * accelAngleY;
+//
+//           pulse = (angleX * 999) / 180;
+//           __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, pulse);
+//
 
 
 
@@ -474,63 +483,64 @@ int main(void)
                  }
                  else
                  {
+//
+//                     error = target_angle - angleX;
+//
+//
+//                     float absError = fabs(error);
+////                     float boost = 0.0f;
+//
+//                     if (error < 0)
+//                     {
+//                         P = kp_down * error;
+//                         D = -kd_down * GxFiltered;
+//                     }
+//                     else
+//                     {
+//                         P = kp_up * error;
+//                         D = -kd_up * GxFiltered;
+//
+////                         if (error > 0.0f && absError >= 2.5f && absError <= 6.0f)
+////                         {
+////                             boost = 40.0f * (absError - 2.0f);
+////                         }
+////                         else
+////                         {
+////                             boost = 0.0f;
+////                         }
+//                     }
+//
+//                     if (fabs(error) < 8.0f)
+//                     {
+//
+//                         integral += error * dt;
+//                     }
+//                     else
+//                     {
+//                         integral = 0.0f;
+//                     }
+//
+//
+//                     if (integral > integral_limit) integral = integral_limit;
+//                     if (integral < -integral_limit) integral = -integral_limit;
+//
+//
+//
+//
+//                     I = ki * integral;
+//
+//                     correction = P + D + I + boost;
+//
+//                     throttle_cmd = base_throttle + correction;
+//
+////                     prev_error = error;
 
-                     error = target_angle - angleX;
 
-
-                     float absError = fabs(error);
-//                     float boost = 0.0f;
-
-                     if (error < 0)
-                     {
-                         P = kp_down * error;
-                         D = -kd_down * GxFiltered;
-                     }
-                     else
-                     {
-                         P = kp_up * error;
-                         D = -kd_up * GxFiltered;
-
-//                         if (error > 0.0f && absError >= 2.5f && absError <= 6.0f)
-//                         {
-//                             boost = 40.0f * (absError - 2.0f);
-//                         }
-//                         else
-//                         {
-//                             boost = 0.0f;
-//                         }
-                     }
-
-                     if (fabs(error) < 8.0f)
-                     {
-
-                         integral += error * dt;
-                     }
-                     else
-                     {
-                         integral = 0.0f;
-                     }
-
-
-                     if (integral > integral_limit) integral = integral_limit;
-                     if (integral < -integral_limit) integral = -integral_limit;
-
-
-
-
-                     I = ki * integral;
-
-                     correction = P + D + I + boost;
-
-                     throttle_cmd = base_throttle + correction;
-
-//                     prev_error = error;
-
-
-
+                     throttle_cmd = Controller_ComputeThrottle();
 
 
                  }
+
 
 //        filteredThrottle = 0.9f * filteredThrottle + 0.1f * throttle_cmd;
 //        throttle_cmd = filteredThrottle;
@@ -539,19 +549,18 @@ int main(void)
         if (throttle_cmd < min_throttle) throttle_cmd = min_throttle;
 
 
-        Send_DShot(throttle_cmd);
+        DShot_Send(throttle_cmd);
 
     }
 
     if (i > 25)
     {
-        printf("A:%7.2f E:%7.2f G:%7.2f B:%.7f I:%7.2f C:%8.2f  T:%3u\r\n",
-                angleX,
-                error,
-                GxFiltered,
-                boost,
-                I,
-                correction,
+        printf("A:%7.2f E:%7.2f G:%7.2f I:%7.2f C:%8.2f T:%3u\r\n",
+                controller_angle,
+                controller_error,
+                controller_gyro,
+                controller_integral_term,
+                controller_correction,
                 throttle_cmd);
     i = 0;
     }
