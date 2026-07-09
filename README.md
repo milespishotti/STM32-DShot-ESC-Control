@@ -1,32 +1,46 @@
 # STM32 One-Axis Brushless Motor Balance Controller
 
-A one-axis self-balancing control system built with an STM32 Nucleo-F411RE, MPU6050 IMU, brushless motor, ESC, and a custom-built wooden test rig.
+https://github.com/milespishotti/STM32-DShot-ESC-Control/blob/main/Media/stm32_balance_demo.mp4
 
-The firmware was written entirely in C and implements a complete embedded feedback loop: reading IMU data over I2C, estimating arm angle using a complementary filter, computing PID control corrections, and transmitting throttle commands to a brushless ESC using the DShot150 digital protocol with DMA.
+A one-axis self-balancing control system built with an STM32 Nucleo-F411RE, MPU6050 IMU, brushless motor, BLHeli_S ESC, and a custom wooden test rig.
 
+The firmware was developed entirely in Embedded C and implements a complete real-time feedback loop: reading IMU data over I2C, estimating arm angle using a complementary filter, computing PID control corrections, and transmitting throttle commands to a brushless ESC using the DShot150 digital protocol with STM32 timers and DMA.
+
+## Features
+
+- Custom DShot150 ESC driver implemented using STM32 timers and DMA
+- Real-time closed-loop PID control running at 100 Hz
+- MPU6050 IMU interface over I2C
+- Complementary filter for sensor fusion and angle estimation
+- Modular firmware architecture separating sensor, control, and motor drivers
+- Brushless motor control using a BLHeli_S ESC
+- Physical one-axis balancing platform for real-world controller validation
 
 ## Hardware
 
+The balancing platform consists of a custom-built mechanical test rig driven by a brushless motor and controlled by an STM32 microcontroller. An MPU6050 IMU provides real-time orientation feedback while a BLHeli_S ESC receives digital throttle commands using the DShot150 protocol.
+
 | Component | Description |
 |-----------|-------------|
-| Microcontroller | STM32 Nucleo-F411RE |
-| IMU | GY-521 MPU6050 6-DOF Accelerometer/Gyroscope |
-| ESC | HGLRC 30A BLHeli_S ESC |
-| Motor | AKK RS2205 2300KV Brushless Motor |
-| Battery | OVONIC 3S 1300mAh 50C LiPo |
-| Test Rig | Custom-built wooden one-axis balancing platform |
+| **Microcontroller** | STM32 Nucleo-F411RE |
+| **IMU** | GY-521 MPU6050 6-DOF Accelerometer/Gyroscope |
+| **ESC** | HGLRC 30A BLHeli_S ESC |
+| **Motor** | AKK RS2205 2300KV Brushless Motor |
+| **Battery** | OVONIC 3S 1300mAh 50C LiPo |
+| **Test Rig** | Custom-built one-axis wooden balancing platform |
 
 <p align="center">
-  <img src="images/full_rig.jpg" width="700">
+  <img src="images/controller_wiring.jpeg" width="850">
 </p>
 
 <p align="center">
-<i>Completed one-axis balancing test rig.</i>
+  <img src="images/motor_wiring.jpeg" width="850">
 </p>
 
 ## System Architecture
 
-The controller operates as a closed-loop feedback system. The STM32 continuously samples the IMU, estimates the current arm angle, computes a PID correction, and commands the brushless motor through the ESC using the DShot150 digital protocol.
+
+The controller is implemented as a closed-loop embedded control system. During each control cycle, the STM32 acquires IMU measurements, estimates the current arm angle, computes a PID correction, and transmits a new DShot150 throttle command to the ESC. This process repeats continuously at a 100 Hz update rate, allowing the system to maintain stability and recover from external disturbances.
 
 ```text
                     +------------------+
@@ -58,7 +72,7 @@ The controller operates as a closed-loop feedback system. The STM32 continuously
                     Brushless Motor
                              |
                              ▼
-                     Generates Thrust
+                     Produces Control Torque
                              |
                              ▼
                   Rotates Balance Arm
@@ -71,7 +85,7 @@ The controller operates as a closed-loop feedback system. The STM32 continuously
 
 ## Software Architecture
 
-The firmware is organized into independent modules to separate hardware interfaces from the control algorithm. Each module is responsible for a single subsystem, making the project easier to debug, maintain, and extend.
+The firmware is organized into modular drivers and control components, separating hardware interfaces from the feedback control algorithm. This modular architecture simplifies debugging, improves maintainability, and allows individual subsystems to be developed and tested independently before full system integration.
 
 ```text
 Core
@@ -88,22 +102,25 @@ Core
     └── main.c
 ```
 
+Each module was developed and validated independently before being integrated into the complete balancing system.
+
 ### main.c
 
-The main application initializes all peripherals, calibrates the IMU during startup, starts the timer interrupts, and executes the main control loop.
+The main application initializes the hardware peripherals, calibrates the IMU during startup, starts the periodic control loop, and coordinates communication between each subsystem.
 
 Responsibilities:
 - System initialization
 - Peripheral configuration
 - IMU calibration
-- Timer management
-- Control loop execution
+- Timer interrupt initialization
+- Main control loop coordination
 
+  
 ---
 
 ### MPU6050 Driver
 
-Interfaces with the MPU6050 over I2C to acquire accelerometer and gyroscope measurements.
+Interfaces with the MPU6050 over I2C to configure the sensor and acquire accelerometer and gyroscope measurements used for attitude estimation.
 
 Responsibilities:
 - Sensor initialization
@@ -127,7 +144,7 @@ Responsibilities:
 
 ### DShot Driver
 
-Generates the DShot150 digital motor control protocol entirely in software using STM32 timers and DMA.
+Implements the DShot150 digital motor control protocol by constructing throttle packets, calculating checksums, and generating precisely timed waveforms using STM32 timers and DMA.
 
 Responsibilities:
 - DShot packet generation
@@ -139,7 +156,7 @@ Responsibilities:
 
 ## Control Algorithm
 
-The controller operates as a real-time closed-loop feedback system running at **100 Hz**. During every control cycle, the STM32 acquires new IMU measurements, estimates the current arm angle, calculates the required motor correction, and transmits a new DShot150 command to the ESC.
+The controller operates as a real-time closed-loop feedback system running at **100 Hz**. During each control cycle, the STM32 acquires new IMU measurements, estimates the current arm angle, computes the required motor correction, and transmits a new DShot150 command to the ESC.
 
 ```text
           MPU6050
@@ -181,48 +198,25 @@ The controller operates as a real-time closed-loop feedback system running at **
 
 Each control cycle begins by reading the accelerometer and gyroscope from the MPU6050 over I2C.
 
-The gyroscope is first calibrated to remove startup bias before a low-pass filter reduces measurement noise. Accelerometer and gyroscope measurements are fused using a complementary filter, providing a fast and stable estimate of the arm angle while minimizing long-term drift.
+The gyroscope is calibrated during startup to remove sensor bias before a low-pass filter reduces measurement noise. Accelerometer and gyroscope measurements are then fused using a complementary filter, providing a fast and stable estimate of the arm angle while minimizing long-term drift.
 
 ### Closed-Loop Control
 
-The estimated angle is continuously compared to a target angle to determine the current control error.
+The estimated arm angle is continuously compared to the desired target angle to determine the control error.
 
 A PID controller computes the required throttle correction using:
 
 - **Proportional (P):** Responds to the current angle error.
-- **Integral (I):** Compensates for small steady-state errors caused by gravity and changing system conditions.
+- **Integral (I):** Eliminates small steady-state errors caused by gravity and changing operating conditions.
 - **Derivative (D):** Uses filtered gyroscope measurements to damp oscillations and improve stability.
 
-The controller applies different proportional and derivative gains depending on the direction of motion to better match the asymmetric dynamics of the balance arm.
+To better match the asymmetric dynamics of the physical system, separate proportional and derivative gains are used depending on the direction of motion.
 
 ### Motor Command Generation
 
-The final controller output is combined with an experimentally determined base throttle before being converted into a DShot150 packet.
+The controller output is combined with an experimentally determined base throttle before being encoded into a DShot150 packet.
 
-The packet is transmitted using an STM32 timer and DMA, allowing the ESC to receive precisely timed digital throttle commands while the CPU continues executing the control loop.
-### Angle Estimation
-
-The MPU6050 provides both accelerometer and gyroscope measurements.
-
-The gyroscope provides smooth short-term angular velocity measurements but accumulates drift over time. The accelerometer provides an absolute estimate of the arm angle but is significantly noisier.
-
-A complementary filter combines both sensors, using the gyroscope for short-term response while continuously correcting long-term drift using the accelerometer.
-
-This approach provides a stable angle estimate suitable for real-time feedback control.
-
-### PID Controller
-
-The estimated arm angle is compared to the desired target angle to calculate the control error.
-
-The controller computes three independent control terms:
-
-- **Proportional (P):** Generates the primary restoring force based on the current angle error.
-- **Integral (I):** Removes steady-state error by accumulating small persistent errors over time.
-- **Derivative (D):** Uses the filtered gyroscope rate to damp oscillations and improve system stability.
-
-The three terms are combined to produce the final throttle correction applied to the brushless motor.
-
-To improve stability, separate proportional and derivative gains are used depending on whether the arm is moving above or below the target angle, allowing the controller to better compensate for the asymmetric dynamics of the physical system.
+The packet is transmitted using an STM32 timer and DMA, allowing the ESC to receive precisely timed digital throttle commands while the CPU continues executing the remainder of the control loop.
 
 
 
@@ -244,11 +238,11 @@ The checksum is calculated using the three packet nibbles before transmission, a
 
 ### DMA-Based Transmission
 
-Generating DShot waveforms entirely in software requires precise timing that is difficult to maintain while simultaneously executing the control algorithm.
+Generating DShot waveforms entirely in software requires precise timing while simultaneously executing the control algorithm.
 
-To solve this, the STM32 timer generates the PWM waveform while DMA continuously updates the timer compare register with the pulse widths corresponding to each DShot bit.
+To achieve this, an STM32 timer generates the PWM waveform while DMA updates the timer compare register with the pulse widths corresponding to each DShot bit.
 
-This approach allows packet transmission with minimal CPU overhead while maintaining consistent timing.
+This hardware-assisted approach enables precise waveform generation with minimal CPU overhead while maintaining deterministic packet timing.
 
 ### Transmission Sequence
 
@@ -275,19 +269,21 @@ ESC Receives Packet
         │
         ▼
 Motor Speed Updated
+
 ```
 
 ## Results
 
-The completed controller successfully maintains the balance arm near the target angle while recovering from external disturbances.
+The completed controller successfully maintains the balance arm near the target angle while recovering from external disturbances. The final system demonstrates stable real-time feedback control on a physical test platform using a custom DShot motor driver and onboard sensor fusion.
 
 Key outcomes include:
 
-- Stable closed-loop balancing at a 100 Hz control rate
-- Reliable DShot150 communication generated entirely in firmware
+- Stable closed-loop balancing at a **100 Hz** control rate
+- Custom DShot150 driver implemented using STM32 timers and DMA
+- Reliable brushless motor control using a BLHeli_S ESC
 - Consistent angle estimation using complementary filtering
-- Successful recovery from manual disturbances
-- Modular firmware architecture separating sensor, controller, and motor control logic
+- Recovery from manual disturbances while maintaining stability
+- Modular firmware architecture separating sensor, control, and motor control subsystems
 
 
 
@@ -296,7 +292,7 @@ Key outcomes include:
 
 Building a reliable closed-loop control system required solving several hardware and firmware challenges throughout development.
 
-### Implementing the DShot Protocol
+### Designing a Custom DShot Driver
 
 Rather than using a standard PWM interface, the project communicates with the ESC using the DShot150 digital protocol. This required implementing packet generation, checksum calculation, and waveform transmission entirely in firmware.
 
@@ -304,7 +300,7 @@ To achieve the required timing accuracy, STM32 timers and DMA were used to gener
 
 ---
 
-### Sensor Calibration and Angle Estimation
+### Developing Reliable Angle Estimation
 
 Raw gyroscope measurements contain bias and drift, while accelerometer measurements are inherently noisy.
 
@@ -318,7 +314,7 @@ This provides fast short-term response while maintaining long-term stability.
 
 ---
 
-### Closed-Loop PID Tuning
+### Controller Tuning
 
 The physical dynamics of the balance arm required iterative tuning of the PID controller.
 
@@ -340,7 +336,7 @@ Several debugging tools and techniques were used throughout development, includi
 - UART serial debugging
 - Oscilloscope measurements
 - Logic analyzer verification of DShot timing
-- Incremental subsystem testing before integrating the complete controller
+- Incremental subsystem validation before integrating the complete controller
 
 These tools were essential for verifying correct communication between the STM32, IMU, and ESC during development.
 
@@ -349,9 +345,9 @@ These tools were essential for verifying correct communication between the STM32
 
 ## Lessons Learned
 
-This project reinforced several important concepts about embedded systems and real-world control design:
+This project reinforced several important principles of embedded systems development and real-time control design:
 
-- Breaking complex systems into smaller, independently testable modules makes debugging significantly more manageable.
-- Real-world control systems require careful consideration of factors that are often ignored in theory, including sensor noise, actuator response, mechanical friction, and battery voltage sag.
-- Verifying individual subsystems before integrating them into the complete controller dramatically reduced debugging time and made isolating problems much easier.
-- Building a robust embedded system requires both software and hardware debugging, with tools such as serial output, oscilloscopes, and logic analyzers playing an equally important role.
+- Developing and validating individual subsystems before full integration significantly simplified debugging and reduced development time.
+- Hardware peripherals such as timers, DMA, and communication interfaces can dramatically reduce CPU overhead while improving timing determinism.
+- Real-world control systems must account for sensor noise, mechanical friction, actuator dynamics, and battery voltage variation in addition to theoretical controller design.
+- Effective embedded development requires both firmware and hardware debugging, making tools such as UART logging, oscilloscopes, and logic analyzers essential throughout the development process.
