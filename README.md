@@ -181,7 +181,7 @@ The controller operates as a real-time closed-loop feedback system running at **
 
 Each control cycle begins by reading the accelerometer and gyroscope from the MPU6050 over I2C.
 
-The gyroscope is first calibrated to remove startup bias before a low-pass filter reduces measurement noise. Accelerometer and gyroscope measurements are then fused using a complementary filter, providing a fast and stable estimate of the arm angle while minimizing long-term drift.
+The gyroscope is first calibrated to remove startup bias before a low-pass filter reduces measurement noise. Accelerometer and gyroscope measurements are fused using a complementary filter, providing a fast and stable estimate of the arm angle while minimizing long-term drift.
 
 ### Closed-Loop Control
 
