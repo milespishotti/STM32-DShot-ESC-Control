@@ -17,9 +17,9 @@ static uint16_t throttle_cmd = 0;
 
 static const uint16_t min_throttle = 100;
 static const uint16_t max_throttle = 650;
-static const uint16_t base_throttle = 410;
+static const uint16_t base_throttle = 450;
 
-static const float target_angle = 5.5f;
+static const float target_angle = 10.0f;
 
 static const float kp_up = 10.0f;
 static const float kd_up = 1.90f;
