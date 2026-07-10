@@ -40,7 +40,7 @@ The balancing platform consists of a custom-built mechanical test rig driven by 
   <img src="Images/rig_balanced.jpeg" width="850">
 </p>
 
-<p aling="center">
+<p align="center">
 <i>Completed one-axis balancing platform used for PID controller development and tuning.</i>
 </p>
 
