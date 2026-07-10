@@ -1,14 +1,17 @@
 # STM32 One-Axis Brushless Motor Balance Controller
 
+A one-axis self-balancing control system built with an STM32 Nucleo-F411RE, MPU6050 IMU, brushless motor, BLHeli_S ESC, and a custom wooden test rig.
+
+The firmware was developed entirely in Embedded C and implements a complete real-time feedback loop: reading IMU data over I2C, estimating arm angle using a complementary filter, computing PID control corrections, and transmitting throttle commands to a brushless ESC using the DShot150 digital protocol with STM32 timers and DMA.
+
 ## Demostration
 
 **Project Demostration (28 seconds)**
 
+Watch the controller initialize, stabilize the balancing platform, and recover from external disturbances.
+
 https://youtu.be/TzGSBiC1iGw
 
-A one-axis self-balancing control system built with an STM32 Nucleo-F411RE, MPU6050 IMU, brushless motor, BLHeli_S ESC, and a custom wooden test rig.
-
-The firmware was developed entirely in Embedded C and implements a complete real-time feedback loop: reading IMU data over I2C, estimating arm angle using a complementary filter, computing PID control corrections, and transmitting throttle commands to a brushless ESC using the DShot150 digital protocol with STM32 timers and DMA.
 
 ## Features
 
