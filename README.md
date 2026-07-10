@@ -1,6 +1,10 @@
 # STM32 One-Axis Brushless Motor Balance Controller
 
-https://github.com/milespishotti/STM32-DShot-ESC-Control/blob/main/Media/stm32_balance_demo.mp4
+## Demostration
+
+**Project Demostration (28 seconds)**
+
+https://youtu.be/TzGSBiC1iGw
 
 A one-axis self-balancing control system built with an STM32 Nucleo-F411RE, MPU6050 IMU, brushless motor, BLHeli_S ESC, and a custom wooden test rig.
 
