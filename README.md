@@ -1,5 +1,13 @@
 # STM32 One-Axis Brushless Motor Balance Controller
 
+![STM32](https://img.shields.io/badge/STM32-F411RE-blue?style=for-the-badge&logo=stmicroelectronics)
+![Embedded C](https://img.shields.io/badge/Language-Embedded%20C-success?style=for-the-badge)
+![DMA](https://img.shields.io/badge/DMA-Timer%20Driven-orange?style=for-the-badge)
+![DShot150](https://img.shields.io/badge/Protocol-DShot150-red?style=for-the-badge)
+![I2C](https://img.shields.io/badge/Interface-I2C-informational?style=for-the-badge)
+![PID](https://img.shields.io/badge/Control-PID-purple?style=for-the-badge)
+![MPU6050](https://img.shields.io/badge/Sensor-MPU6050-yellow?style=for-the-badge)
+
 A one-axis self-balancing control system built with an STM32 Nucleo-F411RE, MPU6050 IMU, brushless motor, BLHeli_S ESC, and a custom wooden test rig.
 
 The firmware was developed entirely in Embedded C and implements a complete real-time feedback loop: reading IMU data over I2C, estimating arm angle using a complementary filter, computing PID control corrections, and transmitting throttle commands to a brushless ESC using the DShot150 digital protocol with STM32 timers and DMA.
