@@ -34,11 +34,11 @@ The balancing platform consists of a custom-built mechanical test rig driven by 
 | **Test Rig** | Custom-built one-axis wooden balancing platform |
 
 <p align="center">
-  <img src="images/controller_wiring.jpeg" width="850">
+  <img src="Images/controller_wiring.jpeg" width="850">
 </p>
 
 <p align="center">
-  <img src="images/motor_wiring.jpeg" width="850">
+  <img src="Images/motor_wiring.jpeg" width="850">
 </p>
 
 ## System Architecture
